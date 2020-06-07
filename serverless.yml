@@ -1,4 +1,4 @@
-service: tweetthehateaway
+service: tweet-the-hate-away
 # app and org for use with dashboard.serverless.com
 #app: your-app-name
 #org: your-org-name
@@ -13,30 +13,18 @@ provider:
   stage: dev
   region: us-east-1
   profile: serverless-framework
+  memorySize: 128
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "secretsmanager:GetSecretValue"
+      Resource: ${env:TWITTER_SECRET_ARN}
+  environment:
+    TWITTER_SECRET_ARN: ${env:TWITTER_SECRET_ARN}
 
 plugins:
   - serverless-plugin-typescript
   - serverless-offline
-
-# you can add statements to the Lambda function's IAM Role here
-#  iamRoleStatements:
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:ListBucket"
-#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:PutObject"
-#      Resource:
-#        Fn::Join:
-#          - ""
-#          - - "arn:aws:s3:::"
-#            - "Ref" : "ServerlessDeploymentBucket"
-#            - "/*"
-
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
 
 # you can add packaging information here
 #package:
@@ -48,8 +36,12 @@ plugins:
 #    - exclude-me-dir/**
 
 functions:
-  hello:
-    handler: handler.hello
+  twitter-challenge-response:
+    handler: app/twitter-web-hook.twitterCrcResponder
+    events:
+      - httpApi:
+          path: /twitter-web-hook
+          method: GET
 # you can add CloudFormation resource templates here
 #resources:
 #  Resources:
