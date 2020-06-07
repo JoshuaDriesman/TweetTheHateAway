@@ -1,12 +1,8 @@
-import { Handler, Context, Callback, APIGatewayEvent } from "aws-lambda";
+import { Handler, APIGatewayEvent } from "aws-lambda";
 import { createHmac } from "crypto";
 import { SecretsManager } from "aws-sdk";
 
-const twitterCrcResponder: Handler = async (
-  event: APIGatewayEvent,
-  context: Context,
-  callback: Callback
-) => {
+const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
   const secretsManagerClient = new SecretsManager({ apiVersion: "2017-10-17" });
 
   const maybeTwitterChallenge = event.queryStringParameters
@@ -14,11 +10,11 @@ const twitterCrcResponder: Handler = async (
     : null;
 
   const maybeTwitterSecretArn = process.env.TWITTER_SECRET_ARN || "";
-  const secretsManagerRequest = secretsManagerClient.getSecretValue({
-    SecretId: maybeTwitterSecretArn,
-  });
-  const secretsManagerPromise = secretsManagerRequest.promise();
-  const secretsManagerResponse = await secretsManagerPromise;
+  const secretsManagerResponse = await secretsManagerClient
+    .getSecretValue({
+      SecretId: maybeTwitterSecretArn,
+    })
+    .promise();
 
   const maybeTwitterConsumerSecretKey:
     | string
@@ -27,17 +23,23 @@ const twitterCrcResponder: Handler = async (
     ? JSON.parse(secretsManagerResponse.SecretString)["ApiSecretKey"]
     : null;
 
-  if (!maybeTwitterChallenge) {
-    console.error("Twitter challenge is missing");
-    callback("Request Failed", { statusCode: 500 });
-  }
   if (!maybeTwitterConsumerSecretKey) {
     console.error("Twitter consumer secret is missing");
-    callback("Request Failed", { statusCode: 500 });
+    return {
+      statusCode: 500,
+      body: "Could not retrieve required resource, internal failure.",
+    };
+  }
+  if (!maybeTwitterChallenge) {
+    console.error("Twitter challenge is missing");
+    return {
+      statusCode: 400,
+      body: "Challenge was not passed in as a query parameter.",
+    };
   }
 
-  const hash = createHmac("sha256", maybeTwitterConsumerSecretKey || "")
-    .update(maybeTwitterChallenge || "")
+  const hash = createHmac("sha256", maybeTwitterConsumerSecretKey)
+    .update(maybeTwitterChallenge)
     .digest("base64");
 
   const response = {
