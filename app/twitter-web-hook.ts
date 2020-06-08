@@ -14,7 +14,14 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
     ? event.queryStringParameters["crc_token"]
     : null;
 
-  const maybeTwitterSecretArn = process.env.TWITTER_SECRET_ARN || "";
+  const maybeTwitterSecretArn = process.env.TWITTER_SECRET_ARN;
+  if (!maybeTwitterSecretArn) {
+    console.error(
+      "Twitter secret ARN environmental variable is not configured properly"
+    );
+    return internalServerError;
+  }
+
   const secretsManagerResponse = await secretsManagerClient
     .getSecretValue({
       SecretId: maybeTwitterSecretArn,
