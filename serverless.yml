@@ -23,8 +23,12 @@ provider:
     TWITTER_SECRET_ARN: ${env:TWITTER_SECRET_ARN}
 
 plugins:
-  - serverless-plugin-typescript
+  - serverless-webpack
   - serverless-offline
+
+custom:
+  webpack:
+    webpack: webpack.config.js
 
 # you can add packaging information here
 #package:
@@ -35,9 +39,16 @@ plugins:
 #    - exclude-me.js
 #    - exclude-me-dir/**
 
+layers:
+  common:
+    path: app/common
+    description: Common utility functions for the application.
+
 functions:
   twitter-challenge-response:
     handler: app/twitter-web-hook.twitterCrcResponder
+    layers:
+      - { Ref: CommonLambdaLayer }
     events:
       - httpApi:
           path: /twitter-web-hook

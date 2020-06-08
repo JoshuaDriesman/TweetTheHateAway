@@ -1,6 +1,11 @@
 import { Handler, APIGatewayEvent } from "aws-lambda";
 import { createHmac } from "crypto";
 import { SecretsManager } from "aws-sdk";
+import {
+  makeResponse,
+  makeError,
+  internalServerError,
+} from "./common/responses";
 
 const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
   const secretsManagerClient = new SecretsManager({ apiVersion: "2017-10-17" });
@@ -25,17 +30,11 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
 
   if (!maybeTwitterConsumerSecretKey) {
     console.error("Twitter consumer secret is missing");
-    return {
-      statusCode: 500,
-      body: "Could not retrieve required resource, internal failure.",
-    };
+    return internalServerError;
   }
   if (!maybeTwitterChallenge) {
     console.error("Twitter challenge is missing");
-    return {
-      statusCode: 400,
-      body: "Challenge was not passed in as a query parameter.",
-    };
+    return makeError("Challenge was not passed in as a query parameter.");
   }
 
   const hash = createHmac("sha256", maybeTwitterConsumerSecretKey)
@@ -46,11 +45,7 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
     response_token: "sha256=" + hash,
   };
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify(response),
-    headers: { "Content-Type": "application/json" },
-  };
+  return makeResponse(response);
 };
 
 export { twitterCrcResponder };
