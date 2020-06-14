@@ -1,5 +1,5 @@
 import { Handler, APIGatewayEvent } from "aws-lambda";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { SecretsManager } from "aws-sdk";
 import {
   makeResponse,
@@ -54,7 +54,7 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
     return makeError("Challenge was not passed in as a query parameter.");
   }
 
-  let hash;
+  let hash: string;
   try {
     hash = await hashConsumerKeyWithContent(maybeTwitterChallenge);
   } catch (err) {
@@ -68,9 +68,49 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
   return makeResponse(response);
 };
 
+const validateSecurityHeader = async (header: string, body: string) => {
+  let bodyHash: string;
+  try {
+    bodyHash = await hashConsumerKeyWithContent(body);
+  } catch (err) {
+    return false;
+  }
+
+  let doesAuthHeaderMatchBodyHash: boolean;
+  try {
+    doesAuthHeaderMatchBodyHash = timingSafeEqual(
+      Buffer.from(bodyHash),
+      Buffer.from(header.replace("sha256=", ""))
+    );
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+
+  return doesAuthHeaderMatchBodyHash;
+};
+
 const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
-  console.log(event.headers);
-  console.log(event.body);
+  const maybeTwitterAuthHeader = event.headers["X-Twitter-Webhooks-Signature"];
+
+  if (!maybeTwitterAuthHeader) {
+    console.log("Missing auth header");
+    return makeError("No twitter auth header!");
+  }
+
+  if (!event.body) {
+    console.log("Empty body");
+    return makeError("Empty body!");
+  }
+
+  const isHeaderValid = await validateSecurityHeader(
+    maybeTwitterAuthHeader,
+    event.body
+  );
+  if (!isHeaderValid) {
+    return makeError("Invalid authentication header!", 401);
+  }
+
   return makeResponse({ msg: "Got it!" });
 };
 

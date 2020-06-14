@@ -13,7 +13,7 @@ provider:
   stage: dev
   region: us-east-1
   profile: serverless-framework
-  memorySize: 128
+  memorySize: 256
   iamRoleStatements:
     - Effect: "Allow"
       Action:
