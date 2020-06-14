@@ -53,6 +53,14 @@ functions:
       - httpApi:
           path: /twitter-web-hook
           method: GET
+  twitter-web-hook-receiver:
+    handler: app/twitter-web-hook.twitterWebhookReceiver
+    layers:
+      - { Ref: CommonLambdaLayer }
+    events:
+      - httpApi:
+          path: /twitter-web-hook
+          method: POST
 # you can add CloudFormation resource templates here
 #resources:
 #  Resources:

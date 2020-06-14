@@ -7,19 +7,15 @@ import {
   internalServerError,
 } from "./common/responses";
 
-const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
+const hashConsumerKeyWithContent = async (content: string) => {
   const secretsManagerClient = new SecretsManager({ apiVersion: "2017-10-17" });
-
-  const maybeTwitterChallenge = event.queryStringParameters
-    ? event.queryStringParameters["crc_token"]
-    : null;
 
   const maybeTwitterSecretArn = process.env.TWITTER_SECRET_ARN;
   if (!maybeTwitterSecretArn) {
-    console.error(
-      "Twitter secret ARN environmental variable is not configured properly"
-    );
-    return internalServerError;
+    const msg =
+      "Twitter secret ARN environmental variable is not configured properly";
+    console.error(msg);
+    throw msg;
   }
 
   const secretsManagerResponse = await secretsManagerClient
@@ -36,17 +32,34 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
     : null;
 
   if (!maybeTwitterConsumerSecretKey) {
-    console.error("Twitter consumer secret is missing");
-    return internalServerError;
+    const msg = "Twitter consumer secret is missing";
+    console.error(msg);
+    throw msg;
   }
+
+  const hash = createHmac("sha256", maybeTwitterConsumerSecretKey)
+    .update(content)
+    .digest("base64");
+
+  return hash;
+};
+
+const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
+  const maybeTwitterChallenge = event.queryStringParameters
+    ? event.queryStringParameters["crc_token"]
+    : null;
+
   if (!maybeTwitterChallenge) {
     console.error("Twitter challenge is missing");
     return makeError("Challenge was not passed in as a query parameter.");
   }
 
-  const hash = createHmac("sha256", maybeTwitterConsumerSecretKey)
-    .update(maybeTwitterChallenge)
-    .digest("base64");
+  let hash;
+  try {
+    hash = await hashConsumerKeyWithContent(maybeTwitterChallenge);
+  } catch (err) {
+    return internalServerError;
+  }
 
   const response = {
     response_token: "sha256=" + hash,
@@ -55,4 +68,10 @@ const twitterCrcResponder: Handler = async (event: APIGatewayEvent) => {
   return makeResponse(response);
 };
 
-export { twitterCrcResponder };
+const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
+  console.log(event.headers);
+  console.log(event.body);
+  return makeResponse({ msg: "Got it!" });
+};
+
+export { twitterCrcResponder, twitterWebhookReceiver };
