@@ -116,7 +116,9 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
 
   // Filter out any tweets which don't contain a mention of the TweetTheHateAway account
   const tweetTheHateAwayUserId = 1272247592332800000;
-  const isTweetCreateEvent = eventBody.tweet_create_events !== undefined;
+  const isTweetCreateEvent =
+    eventBody.tweet_create_events !== undefined &&
+    eventBody.tweet_create_events.length > 0;
   const isMentioned =
     isTweetCreateEvent &&
     eventBody.tweet_create_events[0].entities.user_mentions
@@ -142,9 +144,15 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
     return internalServerError;
   }
 
+  const tweetCreateEvent = eventBody.tweet_create_events[0];
+  const message = {
+    tweetBody: tweetCreateEvent.text,
+    userId: tweetCreateEvent.user.id,
+    statusId: tweetCreateEvent.id,
+  };
   const sns = new SNS();
   const snsParams = {
-    Message: event.body,
+    Message: JSON.stringify(message),
     TopicArn: maybeSnsTopicArn,
   };
   try {
