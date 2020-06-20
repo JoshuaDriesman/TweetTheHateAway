@@ -15,7 +15,8 @@ provider:
   profile: serverless-framework
   memorySize: 256
   environment:
-    TWITTER_SECRET_ARN: ${env:TWITTER_SECRET_ARN}
+    TWITTER_API_SECRET_ARN: ${env:TWITTER_API_SECRET_ARN}
+    TWITTER_USER_SECRET_ARN: ${env:TWITTER_USER_SECRET_ARN}
 
 plugins:
   - serverless-webpack
@@ -24,6 +25,7 @@ plugins:
 custom:
   webpack:
     webpack: webpack.config.js
+    includeModules: true
 
 # you can add packaging information here
 #package:
@@ -93,7 +95,7 @@ resources:
                 - Effect: "Allow"
                   Action:
                     - "secretsmanager:GetSecretValue"
-                  Resource: ${env:TWITTER_SECRET_ARN}
+                  Resource: ${env:TWITTER_API_SECRET_ARN}
           - PolicyName: TweetSnsTopicPublish
             PolicyDocument:
               Version: "2012-10-17"
@@ -117,3 +119,20 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Policies:
+          - PolicyName: TwitterUserSecretRead
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "secretsmanager:GetSecretValue"
+                  Resource: ${env:TWITTER_USER_SECRET_ARN}
+          - PolicyName: TwitterApiSecretRead
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "secretsmanager:GetSecretValue"
+                  Resource: ${env:TWITTER_API_SECRET_ARN}

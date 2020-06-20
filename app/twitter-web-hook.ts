@@ -1,16 +1,16 @@
 import { Handler, APIGatewayEvent } from "aws-lambda";
 import { createHmac, timingSafeEqual } from "crypto";
-import { SecretsManager, SNS } from "aws-sdk";
+import { SNS } from "aws-sdk";
 import {
   makeResponse,
   makeError,
   internalServerError,
 } from "./common/responses";
+import { getSecret } from "./common/secret-manager";
+import { TweetMessage, ApiCredentials } from "./common/data-types";
 
 const hashConsumerKeyWithContent = async (content: string) => {
-  const secretsManagerClient = new SecretsManager({ apiVersion: "2017-10-17" });
-
-  const maybeTwitterSecretArn = process.env.TWITTER_SECRET_ARN;
+  const maybeTwitterSecretArn = process.env.TWITTER_API_SECRET_ARN;
   if (!maybeTwitterSecretArn) {
     const msg =
       "Twitter secret ARN environmental variable is not configured properly";
@@ -18,19 +18,11 @@ const hashConsumerKeyWithContent = async (content: string) => {
     throw msg;
   }
 
-  const secretsManagerResponse = await secretsManagerClient
-    .getSecretValue({
-      SecretId: maybeTwitterSecretArn,
-    })
-    .promise();
-
-  const maybeTwitterConsumerSecretKey:
-    | string
-    | undefined
-    | null = secretsManagerResponse.SecretString
-    ? JSON.parse(secretsManagerResponse.SecretString)["ApiSecretKey"]
-    : null;
-
+  const maybeTwitterConsumerSecret = await getSecret<ApiCredentials>(
+    maybeTwitterSecretArn
+  );
+  const maybeTwitterConsumerSecretKey =
+    maybeTwitterConsumerSecret?.ApiSecretKey;
   if (!maybeTwitterConsumerSecretKey) {
     const msg = "Twitter consumer secret is missing";
     console.error(msg);
@@ -91,6 +83,16 @@ const validateSecurityHeader = async (header: string, body: string) => {
   return doesAuthHeaderMatchBodyHash;
 };
 
+const isTweetMentionAndNotRetweet = (tweet: any): boolean => {
+  const tweetTheHateAwayUserId = 1272247592332800000;
+  const isMentioned = tweet.entities.user_mentions
+    .map((um: Record<string, unknown>) => um.id)
+    .includes(tweetTheHateAwayUserId);
+  const isRetweet = tweet.retweeted_status !== undefined;
+
+  return isMentioned && !isRetweet;
+};
+
 const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
   const maybeTwitterAuthHeader = event.headers["X-Twitter-Webhooks-Signature"];
 
@@ -115,28 +117,21 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
   const eventBody = JSON.parse(event.body);
 
   // Filter out any tweets which don't contain a mention of the TweetTheHateAway account
-  const tweetTheHateAwayUserId = 1272247592332800000;
   const isTweetCreateEvent =
     eventBody.tweet_create_events !== undefined &&
     eventBody.tweet_create_events.length > 0;
-  const isMentioned =
-    isTweetCreateEvent &&
-    eventBody.tweet_create_events[0].entities.user_mentions
-      .map((um: Record<string, unknown>) => um.id)
-      .includes(tweetTheHateAwayUserId);
-  const isRetweet =
-    isTweetCreateEvent &&
-    eventBody.tweet_create_events[0].retweeted_status !== undefined;
 
-  if (!isMentioned || isRetweet) {
+  if (!isTweetCreateEvent) {
     console.log("Event is not what we want, filtering out");
     console.log({
       isTweetCreateEvent,
-      isMentioned,
-      isRetweet,
     });
     return makeResponse({ msg: "Got it!" });
   }
+
+  const mentionedInTweets = eventBody.tweet_create_events.filter(
+    isTweetMentionAndNotRetweet
+  );
 
   const maybeSnsTopicArn = process.env.TWEET_SNS_TOPIC_ARN;
   if (!maybeSnsTopicArn) {
@@ -144,23 +139,25 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
     return internalServerError;
   }
 
-  const tweetCreateEvent = eventBody.tweet_create_events[0];
-  const message = {
-    tweetBody: tweetCreateEvent.text,
-    userId: tweetCreateEvent.user.id,
-    statusId: tweetCreateEvent.id,
-  };
-  const sns = new SNS();
-  const snsParams = {
-    Message: JSON.stringify(message),
-    TopicArn: maybeSnsTopicArn,
-  };
-  try {
-    await sns.publish(snsParams).promise();
-  } catch (err) {
-    console.error("SNS Publish Failed");
-    console.error(err);
-    return internalServerError;
+  for (const tweet of mentionedInTweets) {
+    const message: TweetMessage = {
+      tweetBody: tweet.text,
+      userId: tweet.user.id,
+      user: tweet.user.screen_name,
+      statusId: tweet.id,
+    };
+    const sns = new SNS();
+    const snsParams = {
+      Message: JSON.stringify(message),
+      TopicArn: maybeSnsTopicArn,
+    };
+    try {
+      await sns.publish(snsParams).promise();
+    } catch (err) {
+      console.error("SNS Publish Failed");
+      console.error(err);
+      return makeError("Failed to post an SNS message", 500);
+    }
   }
 
   return makeResponse({ msg: "Got it!" });
