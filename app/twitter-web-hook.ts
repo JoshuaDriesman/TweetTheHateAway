@@ -112,6 +112,30 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
     return makeError("Invalid authentication header!", 401);
   }
 
+  const eventBody = JSON.parse(event.body);
+
+  // Filter out any tweets which don't contain a mention of the TweetTheHateAway account
+  const tweetTheHateAwayUserId = 1272247592332800000;
+  const isTweetCreateEvent = eventBody.tweet_create_events !== undefined;
+  const isMentioned =
+    isTweetCreateEvent &&
+    eventBody.tweet_create_events[0].entities.user_mentions
+      .map((um: Record<string, unknown>) => um.id)
+      .includes(tweetTheHateAwayUserId);
+  const isRetweet =
+    isTweetCreateEvent &&
+    eventBody.tweet_create_events[0].retweeted_status !== undefined;
+
+  if (!isMentioned || isRetweet) {
+    console.log("Event is not what we want, filtering out");
+    console.log({
+      isTweetCreateEvent,
+      isMentioned,
+      isRetweet,
+    });
+    return makeResponse({ msg: "Got it!" });
+  }
+
   const maybeSnsTopicArn = process.env.TWEET_SNS_TOPIC_ARN;
   if (!maybeSnsTopicArn) {
     console.error("No SNS topic ARN set!");
