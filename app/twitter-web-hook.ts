@@ -1,6 +1,6 @@
 import { Handler, APIGatewayEvent } from "aws-lambda";
 import { createHmac, timingSafeEqual } from "crypto";
-import { SecretsManager } from "aws-sdk";
+import { SecretsManager, SNS } from "aws-sdk";
 import {
   makeResponse,
   makeError,
@@ -73,6 +73,7 @@ const validateSecurityHeader = async (header: string, body: string) => {
   try {
     bodyHash = await hashConsumerKeyWithContent(body);
   } catch (err) {
+    console.error(err);
     return false;
   }
 
@@ -109,6 +110,25 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
   );
   if (!isHeaderValid) {
     return makeError("Invalid authentication header!", 401);
+  }
+
+  const maybeSnsTopicArn = process.env.TWEET_SNS_TOPIC_ARN;
+  if (!maybeSnsTopicArn) {
+    console.error("No SNS topic ARN set!");
+    return internalServerError;
+  }
+
+  const sns = new SNS();
+  const snsParams = {
+    Message: event.body,
+    TopicArn: maybeSnsTopicArn,
+  };
+  try {
+    await sns.publish(snsParams).promise();
+  } catch (err) {
+    console.error("SNS Publish Failed");
+    console.error(err);
+    return internalServerError;
   }
 
   return makeResponse({ msg: "Got it!" });

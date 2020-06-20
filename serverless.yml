@@ -14,11 +14,6 @@ provider:
   region: us-east-1
   profile: serverless-framework
   memorySize: 256
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-        - "secretsmanager:GetSecretValue"
-      Resource: ${env:TWITTER_SECRET_ARN}
   environment:
     TWITTER_SECRET_ARN: ${env:TWITTER_SECRET_ARN}
 
@@ -47,6 +42,7 @@ layers:
 functions:
   twitter-challenge-response:
     handler: app/twitter-web-hook.twitterCrcResponder
+    role: twitterWebhookRole
     layers:
       - { Ref: CommonLambdaLayer }
     events:
@@ -55,20 +51,69 @@ functions:
           method: GET
   twitter-web-hook-receiver:
     handler: app/twitter-web-hook.twitterWebhookReceiver
+    role: twitterWebhookRole
+    environment:
+      TWEET_SNS_TOPIC_ARN:
+        Ref: SNSTopicTweettopic
     layers:
       - { Ref: CommonLambdaLayer }
     events:
       - httpApi:
           path: /twitter-web-hook
           method: POST
-# you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
-#  Outputs:
-#     NewOutput:
-#       Description: "Description for the output"
-#       Value: "Some output value"
+  tweet-responder:
+    handler: app/tweet-responder.tweetResponder
+    role: tweetResponderRole
+    layers:
+      - { Ref: CommonLambdaLayer }
+    events:
+      - sns: tweet-topic
+
+resources:
+  Resources:
+    twitterWebhookRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: TwitterWebhookRole
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Policies:
+          - PolicyName: TwitterApiSecretRead
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "secretsmanager:GetSecretValue"
+                  Resource: ${env:TWITTER_SECRET_ARN}
+          - PolicyName: TweetSnsTopicPublish
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "sns:Publish"
+                  Resource:
+                    Ref: SNSTopicTweettopic
+    tweetResponderRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: TweetResponderRole
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
