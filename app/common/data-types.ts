@@ -1,8 +1,8 @@
 interface TweetMessage {
   tweetBody: string;
-  userId: number;
+  userId: string;
   user: string;
-  statusId: number;
+  statusId: string;
 }
 
 interface ApiCredentials {
