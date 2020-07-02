@@ -83,14 +83,15 @@ const validateSecurityHeader = async (header: string, body: string) => {
   return doesAuthHeaderMatchBodyHash;
 };
 
-const isTweetMentionAndNotRetweet = (tweet: any): boolean => {
-  const tweetTheHateAwayUserId = 1272247592332800000;
+const isTweetMentionAndNotRetweetAndSelfNotAuthor = (tweet: any): boolean => {
+  const tweetTheHateAwayUserId = "1272247592332800000";
   const isMentioned = tweet.entities.user_mentions
-    .map((um: Record<string, unknown>) => um.id)
+    .map((um: Record<string, unknown>) => um.id_str)
     .includes(tweetTheHateAwayUserId);
   const isRetweet = tweet.retweeted_status !== undefined;
+  const tweetTheHateAwayIsAuthor = tweet.user.id_str === tweetTheHateAwayUserId;
 
-  return isMentioned && !isRetweet;
+  return isMentioned && !isRetweet && !tweetTheHateAwayIsAuthor;
 };
 
 const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
@@ -130,7 +131,7 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
   }
 
   const mentionedInTweets = eventBody.tweet_create_events.filter(
-    isTweetMentionAndNotRetweet
+    isTweetMentionAndNotRetweetAndSelfNotAuthor
   );
 
   const maybeSnsTopicArn = process.env.TWEET_SNS_TOPIC_ARN;

@@ -33,7 +33,6 @@ const tweetResponder: Handler = async (event: SNSEvent) => {
   });
   for (const record of event.Records) {
     const msg: TweetMessage = JSON.parse(record.Sns.Message);
-    console.log(msg.statusId);
     await t.post("statuses/update", {
       status: `@${msg.user} Thanks for talking to me!`,
       in_reply_to_status_id: msg.statusId,
