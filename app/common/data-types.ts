@@ -2,7 +2,7 @@ interface TweetMessage {
   tweetBody: string;
   userId: string;
   user: string;
-  statusId: string;
+  respondToId: string;
 }
 
 interface ApiCredentials {

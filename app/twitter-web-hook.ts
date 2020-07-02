@@ -145,7 +145,7 @@ const twitterWebhookReceiver: Handler = async (event: APIGatewayEvent) => {
       tweetBody: tweet.text,
       userId: tweet.user.id_str,
       user: tweet.user.screen_name,
-      statusId: tweet.id_str,
+      respondToId: tweet.in_reply_to_status_id_str || tweet.id_str,
     };
     const sns = new SNS();
     const snsParams = {
