@@ -42,7 +42,7 @@ layers:
     description: Common utility functions for the application.
 
 functions:
-  twitter-challenge-response:
+  twitterChallengeResponse:
     handler: app/twitter-web-hook.twitterCrcResponder
     role: twitterWebhookRole
     layers:
@@ -51,7 +51,7 @@ functions:
       - httpApi:
           path: /twitter-web-hook
           method: GET
-  twitter-web-hook-receiver:
+  twitterWebhookReceiver:
     handler: app/twitter-web-hook.twitterWebhookReceiver
     role: twitterWebhookRole
     environment:
@@ -63,7 +63,7 @@ functions:
       - httpApi:
           path: /twitter-web-hook
           method: POST
-  tweet-responder:
+  tweetResponder:
     handler: app/tweet-responder.tweetResponder
     role: tweetResponderRole
     layers:
@@ -73,6 +73,23 @@ functions:
 
 resources:
   Resources:
+    responseResourceTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: tweetTheHateAwayResponseTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: "S"
+          - AttributeName: topic
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: topic
+            KeyType: HASH
+          - AttributeName: id
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
     twitterWebhookRole:
       Type: AWS::IAM::Role
       Properties:
